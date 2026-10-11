@@ -959,6 +959,46 @@ SlashCmdList.RXPENHANCED("intro")
 check("/rxpe intro turns it back on", db.skipIntro == true)
 M.level, M.xp = M.levelWas or 5, 0
 
+-- ---------------------------------------------------------------- Done, and ticking the headline
+M.quests.on[363], M.quests.complete[363], M.quests.done[363] = true, true, nil
+local s7 = RXP.currentGuide.steps[7]
+for _, el in ipairs(s7.elements) do el.skip = nil end
+db.skipLog, db.doneLog = {}, {}
+goStep(7)
+local doneBtn = find(ui_, function(f) return f.shown and f.Setup and f.text and f.text.text == "Done" end)
+local backBtn = find(ui_, function(f) return f.shown and f.Setup and f.text and f.text.text == "Back" end)
+local skipBtn = find(ui_, function(f) return f.shown and f.Setup and f.text and f.text.text == "Skip" end)
+check("footer: Done between Back and Skip", doneBtn and doneBtn.points[1][4] > backBtn.points[1][4] and doneBtn.points[1][4] < skipBtn.points[1][4])
+local headTick = find(ui_, function(f) return f.shown and f.element and f.bg and not f.text end)
+check("headline: its line can be ticked off too", headTick and headTick.element.tag == "turnin" and headTick.element.questId == 363)
+headTick.scripts.OnEnter(headTick)
+check("headline: says so on hover", GameTooltip.title == "Click to tick it off")
+headTick:Click()
+check("headline tick: what RestedXP's checkbox does", s7.elements[3].skip == true and RXP.updateSteps == true)
+check("headline tick: the next thing leads now", Card.model.headline:find("Accept The Mindless Ones") ~= nil, Card.model.headline)
+s7.elements[3].skip = nil
+update()
+RXP.updateSteps = false
+doneBtn:Click()
+check("Done: every line on the step ticked off", s7.elements[3].skip == true and s7.elements[4].skip == true and not s7.elements[1].skip)
+check("Done: RestedXP told, so it counts the step complete", RXP.updateSteps == true)
+RXP.SetStep(8) -- RestedXP moves on by itself once every line is ticked
+update()
+check("Done: shows as done under Earlier steps (the turn-in never really happened)", Card.PastStatus(s7, RXP.currentGuide) == "done")
+skipBtn:Click()
+update()
+check("Skip: shows as skipped instead", Card.PastStatus(RXP.currentGuide.steps[8], RXP.currentGuide) == "skipped")
+backBtn:Click()
+update()
+backBtn:Click()
+update()
+check("going back: Done is forgotten for that step", not (db.doneLog[RXP.currentGuide.key] or {})[7] and not s7.elements[4].skip)
+local notesOnly = RXP.currentGuide.steps[11]
+goStep(11)
+local before = #RXP.setStepCalls
+doneBtn:Click()
+check("Done on a step of notes only: moves on", RXP.setStepCalls[before + 1] == 12 and RXP.progress == 12)
+
 print(("%d passed, %d failed"):format(passed, failed))
 io.stdout:write(("%d passed, %d failed\n"):format(passed, failed))
 for _, line in ipairs(M.printed) do if line:find("Error") then io.stdout:write(line .. "\n") end end

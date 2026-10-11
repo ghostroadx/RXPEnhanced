@@ -427,10 +427,7 @@ local function skipLog(guide, create)
     return log
 end
 
-function Card.NoteSkipped(guide, index)
-    local log = index and skipLog(guide, true)
-    if not log then return end
-    log[index] = true
+local function trim(log)
     local n, lowest = 0, nil
     for i in pairs(log) do
         n = n + 1
@@ -439,12 +436,46 @@ function Card.NoteSkipped(guide, index)
     if n > SKIPLOG_MAX and lowest then log[lowest] = nil end
 end
 
+local doneLog
+
+function Card.NoteSkipped(guide, index)
+    local log = index and skipLog(guide, true)
+    if not log then return end
+    log[index] = true
+    trim(log)
+    local dones = doneLog(guide)
+    if dones then dones[index] = nil end
+end
+
+-- Steps you finished with Done (or by ticking off their last line), per guide: they count as done
+-- in Earlier steps even when the game can't tell (a quest you never really picked up, say).
+function doneLog(guide, create)
+    local key = guideKey(guide)
+    if not (key and db) then return nil end
+    db.doneLog = type(db.doneLog) == "table" and db.doneLog or {}
+    local log = db.doneLog[key]
+    if not log and create then
+        log = {}
+        db.doneLog[key] = log
+    end
+    return log
+end
+
+function Card.NoteDone(guide, index)
+    local log = index and doneLog(guide, true)
+    if not log then return end
+    log[index] = true
+    trim(log)
+    local skips = skipLog(guide)
+    if skips then skips[index] = nil end
+end
+
 -- Going back to a step: it and everything after it count as not done yet.
 function Card.ForgetSkipsFrom(guide, index)
-    local log = skipLog(guide)
-    if not log then return end
-    for i in pairs(log) do
-        if i >= index then log[i] = nil end
+    for _, log in ipairs({ skipLog(guide) or {}, doneLog(guide) or {} }) do
+        for i in pairs(log) do
+            if i >= index then log[i] = nil end
+        end
     end
 end
 
@@ -466,8 +497,11 @@ end
 function Card.PastStatus(step, guide)
     local log = skipLog(guide)
     if log and log[step.index] then return "skipped" end
+    local dones = doneLog(guide)
+    if dones and dones[step.index] then return "done" end
     for _, el in ipairs(step.elements or {}) do
-        if not el.textOnly and pastDone(el) == false and not el.completed then return "skipped" end
+        -- A line you ticked off counts as done, as it does for RestedXP.
+        if not el.textOnly and not el.completed and not el.skip and pastDone(el) == false then return "skipped" end
     end
     return "done"
 end
@@ -662,12 +696,46 @@ function Card.Jump(index)
     Card.dirty = true
 end
 
+-- Done: tick off everything left on the step you're on, as if you'd ticked each of RestedXP's
+-- checkboxes, so RestedXP counts the step as complete and moves on by itself.
+function Card.Complete()
+    if not ready() then return end
+    local guide, cur = rxp.currentGuide, P.call(rxp.GetGuideProgress)
+    if type(guide) ~= "table" or type(cur) ~= "number" or type(guide.steps) ~= "table" then return end
+    local step = guide.steps[cur]
+    if type(step) ~= "table" then return end
+    local ticked = 0
+    for _, el in ipairs(step.elements or {}) do
+        if not el.textOnly and not el.optional and not el.completed and not el.skip then
+            if el.OnComplete then pcall(el.OnComplete, el) end
+            el.skip = true
+            if el.frame and el.frame.button then pcall(el.frame.button.SetChecked, el.frame.button, true) end
+            ticked = ticked + 1
+        end
+    end
+    Card.NoteDone(guide, step.index or cur)
+    Card.manual = "done"
+    rxp.updateSteps = true
+    P.call(rxp.UpdateMap)
+    -- Nothing left to tick (a step of notes only, or RestedXP hasn't caught up): move on.
+    if ticked == 0 then P.call(rxp.SetStep, cur + 1) end
+    Card.dirty = true
+end
+
 -- Ticking a line: what RestedXP's checkbox for it does (GuideWindow.lua ActiveStepElementPostClick).
 function Card.Toggle(el)
     if not (ready() and type(el) == "table") or el.textOnly or el.optional then return end
     local skip = not el.skip
     if el.OnComplete and skip and not el.skip then pcall(el.OnComplete, el) end
     el.skip = skip
+    local step = el.step
+    if skip and type(step) == "table" and step.index and step.index == P.call(rxp.GetGuideProgress) then
+        local open = false
+        for _, other in ipairs(step.elements or {}) do
+            if not other.textOnly and not other.optional and not other.completed and not other.skip then open = true end
+        end
+        if not open then Card.NoteDone(rxp.currentGuide, step.index) end
+    end
     rxp.updateSteps = true
     P.call(rxp.UpdateMap)
     if el.frame and el.frame.button then pcall(el.frame.button.SetChecked, el.frame.button, skip or el.completed) end
@@ -1338,6 +1406,22 @@ local function createCards()
     ui.icon = card:CreateTexture(nil, "ARTWORK")
     ui.icon:SetSize(18, 18)
     ui.headline = card:CreateFontString(nil, "ARTWORK")
+    -- The headline's own line can be ticked off like the others: a hover area under it.
+    ui.headTick = CreateFrame("Button", nil, card)
+    ui.headTick.bg = nineSlice(ui.headTick, PANEL_FILE, "BACKGROUND", 6)
+    ui.headTick.bg:SetShown(false)
+    ui.headTick:SetScript("OnEnter", function(self)
+        self.bg:SetColor(T.hover[1], T.hover[2], T.hover[3], T.hover[4])
+        self.bg:SetShown(true)
+        showTooltip(self, "Click to tick it off", { "Ticking off every line counts the step as done, as RestedXP's checkboxes do. Done below ticks them all." })
+    end)
+    ui.headTick:SetScript("OnLeave", function(self)
+        self.bg:SetShown(false)
+        GameTooltip:Hide()
+    end)
+    ui.headTick:SetScript("OnClick", function(self)
+        if self.element then Card.Toggle(self.element) Card.Update() end
+    end)
     ui.help = CreateFrame("Button", nil, card)
     ui.help:SetSize(18, 18)
     ui.help.icon = ui.help:CreateTexture(nil, "ARTWORK")
@@ -1408,7 +1492,9 @@ local function createCards()
     ui.back = textButton(card, function() Card.Back() Card.Update() end)
     ui.back.tooltipTitle, ui.back.tooltipText = "Back", "Go back to the step before this one."
     ui.skip = textButton(card, function() Card.Skip() Card.Update() end)
-    ui.skip.tooltipTitle, ui.skip.tooltipText = "Skip", "Move on without finishing this step."
+    ui.skip.tooltipTitle, ui.skip.tooltipText = "Skip", "Move on without finishing this step. It shows as skipped under Earlier steps; Done counts it as complete."
+    ui.done = textButton(card, function() Card.Complete() Card.Update() end)
+    ui.done.tooltipTitle, ui.done.tooltipText = "Done", "Tick off everything left on this step, as if you'd ticked each of RestedXP's checkboxes. RestedXP counts it as complete and moves on, and it shows as done under Earlier steps."
 
     -- The along-the-way card.
     ui.alongHeader = newHeader(along, function()
@@ -1464,6 +1550,16 @@ function Card.Render(m)
     local h = setText(ui.headline, long and "medium" or "semibold", headSize, T.text1, inner - 26 - (hasReasons and 22 or 0), m.headline, 0)
     ui.headline:ClearAllPoints()
     ui.headline:SetPoint("TOPLEFT", card, "TOPLEFT", pad + 26, y)
+    local tickable = m.headlineEl and not m.headlineEl.optional and m.headlineEl or nil
+    ui.headTick.element = tickable
+    if tickable then
+        ui.headTick:ClearAllPoints()
+        ui.headTick:SetPoint("TOPLEFT", card, "TOPLEFT", pad - 6, y + 4)
+        ui.headTick:SetSize(inner + 6 - (hasReasons and 22 or 0), h + 8)
+        ui.headTick:Show()
+    else
+        ui.headTick:Hide()
+    end
     if hasReasons then
         ui.help:ClearAllPoints()
         ui.help:SetPoint("TOPLEFT", card, "TOPLEFT", W - pad - 18, y + 1)
@@ -1624,11 +1720,16 @@ function Card.Render(m)
         ui.skip:ClearAllPoints()
         ui.skip:SetPoint("TOPLEFT", card, "TOPLEFT", W - pad + 8 - ui.skip:GetWidth(), y)
         ui.skip:Show()
+        ui.done:Setup("Done", "check", nil, "ghost", base - 1)
+        ui.done:ClearAllPoints()
+        ui.done:SetPoint("TOPLEFT", card, "TOPLEFT", floor((W - ui.done:GetWidth()) / 2 + 0.5), y)
+        ui.done:Show()
         y = y - 24
     else
         ui.divFooter:Hide()
         ui.back:Hide()
         ui.skip:Hide()
+        ui.done:Hide()
     end
     card:SetHeight(-y + 10)
 end

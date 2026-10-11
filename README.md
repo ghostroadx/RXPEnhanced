@@ -13,7 +13,7 @@ RestedXP still runs the guide. RXP Enhanced reads it and shows it differently.
 
 - **Guide card.** Shows the step you're on: the next thing to do with an icon, who to talk to and how far, warnings (full quest log, missing turn-in), and the step's other lines, which you can tick off.
   - **Up next:** the coming steps RestedXP won't skip, each with its distance and a small arrow pointing the way. Scroll up past the current step to see earlier steps: done ones in green with a tick, skipped ones in grey. Shift-click a row to jump to that step.
-  - **Back and Skip buttons**, plus notices like "Skipped step 9: you already have Fresh Meat" or "You picked up X; the guide gets to it at step N".
+  - **Back, Done and Skip buttons.** Done ticks off everything left on the step, the way RestedXP's checkboxes do, so RestedXP counts it as complete; Skip moves on without finishing it. You can also click any line, including the headline, to tick just that one. Notices like "Skipped step 9: you already have Fresh Meat" or "You picked up X; the guide gets to it at step N".
   - **Two looks:** Dark or Glass.
 - **Along-the-way card.** Every open `#completewith` step, plus RestedXP's tip. It docks to any side of the main card, or floats free.
 - **Waypoint marker.** Sets the game's map waypoint wherever RestedXP's arrow points and draws a marker in the world (Pin, Gold ring or Beacon).
