@@ -1,0 +1,12 @@
+## Interface: 16001
+## Title: RXP Enhanced
+## Notes: Clean guide cards and an in-world waypoint marker for RestedXP, a second arrow and map pins for the step after yours, step toasts, RestedXP's other windows restyled, and the new-character intro skipped. /rxpe for settings
+## Author: ghostroadx
+## Version: 1.7.1
+## Dependencies: RXPGuides
+## SavedVariables: RXPEnhancedDB
+
+RXPEnhanced.lua
+Card.lua
+Waypoint.lua
+Toast.lua
