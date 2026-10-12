@@ -20,7 +20,7 @@ RestedXP still runs the guide. RXP Enhanced reads it and shows it differently.
   - When the step's NPC has a nameplate on screen, the marker stands on the NPC.
   - When the spot is off screen, an edge arrow points the way.
   - On arrival, an effect and a sound play.
-- **Second arrow and pins.** A tinted second arrow, plus world map and minimap pins, for the step after the one you're on.
+- **Second arrow and pins.** A tinted second arrow, plus world map and minimap pins, for the step after the one you're on. On RestedXP's Speedrun guides, where a step's coordinates sit on the travel step before it ("Travel to ...", marked `#completewith next`), the arrow takes them from there.
 - **Step toasts.** When RestedXP moves to the next step or you reach a waypoint, a small card rises into view showing the step. It stays about three seconds, then fades. You can move it wherever you like.
 - **RestedXP's other windows restyled.** Active items, Active targets and Level splits get the card look. An Active targets button gets a pulsing green ring when its NPC is near you.
 - **Timing log (off by default).** Records how long each guide step takes you and how long each kill takes, so a route planner can use your real pace instead of guesses. See [Timing log](#timing-log).
