@@ -117,6 +117,7 @@ local function newObject(kind, name, parent)
     function o:HookScript(k, f) local old = self.scripts[k]; self.scripts[k] = function(...) if old then old(...) end f(...) end end
     function o:RegisterEvent(e) self.events[e] = true end
     function o:UnregisterEvent(e) self.events[e] = nil end
+    function o:UnregisterAllEvents() self.events = {} end
     function o:SetPoint(...) self.points[#self.points + 1] = { ... } end
     function o:ClearAllPoints() self.points = {} end
     function o:SetAllPoints(rel) self.points = { { "TOPLEFT", rel or self.parent, "TOPLEFT", 0, 0 } }; self.allPoints = rel or self.parent end

@@ -655,6 +655,7 @@ function Card.Back()
             untick(step)
             Card.ForgetSkipsFrom(guide, step.index or i)
             Card.manual = "back"
+            if NS.Log then NS.Log.Manual("back") end
             P.call(rxp.SetStep, step.index or i)
             Card.dirty = true
             return
@@ -668,6 +669,7 @@ function Card.Skip()
     if type(cur) ~= "number" then return end
     Card.NoteSkipped(rxp.currentGuide, cur)
     Card.manual = "skip"
+    if NS.Log then NS.Log.Manual("skip") end
     P.call(rxp.SetStep, cur + 1)
     Card.dirty = true
 end
@@ -691,6 +693,7 @@ function Card.Jump(index)
         end
     end
     Card.manual = "jump"
+    if NS.Log then NS.Log.Manual(index < (cur or index) and "back" or "jump") end
     Card.notice = nil
     P.call(rxp.SetStep, index)
     Card.dirty = true

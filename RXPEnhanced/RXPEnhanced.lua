@@ -78,6 +78,8 @@ local DEFAULTS = {
     toast = true, -- a toast when you reach a waypoint or move to the next step
     toastPoint = nil, -- where it shows, once moved
     skipIntro = true, -- skip the opening cinematic on a new character's first login
+    -- The timing log for the route engine (Log.lua).
+    logTimes = false, -- off unless you turn it on
 }
 local OLD_DEFAULT_COLOR = { 0.43, 0.78, 1.0 } -- 1.0.0's light blue
 local LOOKAHEAD = 60 -- steps to look through for the next one
@@ -528,8 +530,9 @@ local function init()
     if NS.Card and NS.Card.Init then NS.Card.Init() end
     if NS.Waypoint and NS.Waypoint.Init then NS.Waypoint.Init() end
     if NS.Toast and NS.Toast.Init then NS.Toast.Init() end
+    if NS.Log and NS.Log.Init then NS.Log.Init() end
     -- The game only picks up an addon's new files when it starts, not on /reload.
-    if not (NS.Card and NS.Waypoint and NS.Toast) then
+    if not (NS.Card and NS.Waypoint and NS.Toast and NS.Log) then
         msg("quit and restart WoW (not just /reload) to finish updating: some of its files aren't loaded yet.")
     end
 end
@@ -569,6 +572,7 @@ local function settingsChanged()
     if NS.Card and NS.Card.Apply then NS.Card.Apply() end
     if NS.Waypoint and NS.Waypoint.Apply then NS.Waypoint.Apply() end
     if NS.Toast and NS.Toast.Apply then NS.Toast.Apply() end
+    if NS.Log and NS.Log.Apply then NS.Log.Apply() end
     if NS.SettingsLookChanged then NS.SettingsLookChanged() end
     syncPanels()
 end
@@ -658,6 +662,9 @@ local BLIZZARD_FONTS = {
 }
 local INK = { 0.067, 0.075, 0.090 } -- the tick on a ticked box: the dark card's colour
 local ENHANCED_TIP = "The guide cards, this window in the cards' look, and RestedXP's other windows restyled. Off, RestedXP's own window comes back and everything is in RestedXP's and Blizzard's own look. The second arrow, the map pins, the waypoint marker and the toast have their own switches."
+local LOG_TIP = "Off unless you turn it on. While it's on, it records how long each guide step takes you, and each kill: from engaging the mob to its death, the walk to it, and the loot and rest after. Also level-ups, deaths and time at NPCs. It's kept with these settings in WTF\\Account\\<account>\\SavedVariables\\RXPEnhanced.lua, written when you log out or reload; tools/timing_log.py turns it into the route engine's numbers."
+local LOG_CLEAR_WINDOW = 4 -- seconds the Clear log button waits for its second click
+local logClearArmed -- when Clear log was clicked once
 
 local function cardUI() return NS.Card and NS.Card.UI end
 
@@ -1195,6 +1202,33 @@ local function buildPanel(parent, opts)
     y = y - 8
     header("RestedXP's windows")
     check("targetGlow", "Highlight active targets near you", "A green ring on each Active targets button whose NPC is near you, before you target or mouse over it. It sees NPCs whose nameplates are showing (turn on friendly nameplates to catch quest NPCs, and enemy ones for mobs), plus whatever RestedXP's own proximity scan finds when that's on in RestedXP.")
+    y = y - 8
+    header("Timing log")
+    check("logTimes", "Log step and kill times for the route engine", LOG_TIP)
+    p.logStatus = text(target, "small")
+    p.logStatus:SetPoint("TOPLEFT", left, y - 4)
+    p.logStatus:SetWidth(width)
+    p.logStatus:SetJustifyH("LEFT")
+    y = y - 42
+    p.logNew = button("New session", 110, 0, "New session", "Starts a new session in the log, kept apart from what came before: a fresh character, or a run you want timed on its own. Sessions also start by themselves when you log in after more than 15 minutes away.", function()
+        if not NS.Log then return end
+        NS.Log.NewSession()
+        clickSound(true)
+        syncPanels()
+    end)
+    p.logClear = button("Clear log", 120, 116, "Clear log", "Deletes everything logged so far. Click twice: the second click deletes it.", function()
+        if not NS.Log then return end
+        if logClearArmed and GetTime() - logClearArmed <= LOG_CLEAR_WINDOW then
+            logClearArmed = nil
+            NS.Log.Clear()
+            msg("timing log cleared.")
+        else
+            logClearArmed = GetTime()
+        end
+        clickSound(true)
+        syncPanels()
+    end)
+    y = y - 26
     local generalHeight = -y
 
     local tallest = math.max(arrowHeight, waypointHeight, cardHeight, generalHeight)
@@ -1230,6 +1264,7 @@ local function buildPanel(parent, opts)
         if since >= 0.5 then
             since = 0
             status:SetText(statusText())
+            if p.logStatus and p.logStatus:IsVisible() then p:SyncLog() end
         end
     end)
 
@@ -1251,6 +1286,16 @@ local function buildPanel(parent, opts)
         else
             cb.Text:SetTextColor(0.5, 0.5, 0.5)
         end
+    end
+
+    -- The timing log's line and buttons.
+    function p:SyncLog()
+        local L = NS.Log
+        self.logStatus:SetText(L and L.StatusText() or "Needs a full restart of WoW (not just /reload) to load.")
+        if logClearArmed and GetTime() - logClearArmed > LOG_CLEAR_WINDOW then logClearArmed = nil end
+        self.logClear:SetText(logClearArmed and "Click to confirm" or "Clear log")
+        self.logNew:SetEnabled(L ~= nil)
+        self.logClear:SetEnabled(L ~= nil)
     end
 
     function p:Sync()
@@ -1296,6 +1341,7 @@ local function buildPanel(parent, opts)
             local moving = NS.Toast and NS.Toast.IsMoving and NS.Toast.IsMoving()
             self.toastMove:SetText(moving and "Done moving" or "Move toast")
         end
+        if self.logStatus then self:SyncLog() end
         for _, b in ipairs(self.tabs) do
             local selected = b.id == self.tab
             if styled then
@@ -1488,10 +1534,42 @@ SlashCmdList.RXPENHANCED = function(input)
         return
     elseif cmd == "debug" then
         local version = C_AddOns and C_AddOns.GetAddOnMetadata and call(C_AddOns.GetAddOnMetadata, ADDON_NAME or "RXPEnhanced", "Version")
-        msg(("version %s · files loaded: card %s, waypoint %s"):format(tostring(version or "?"), onOff(NS.Card ~= nil), onOff(NS.Waypoint ~= nil)))
+        msg(("version %s · files loaded: card %s, waypoint %s, toast %s, log %s"):format(tostring(version or "?"), onOff(NS.Card ~= nil),
+            onOff(NS.Waypoint ~= nil), onOff(NS.Toast ~= nil), onOff(NS.Log ~= nil)))
         if NS.Card and NS.Card.Debug then NS.Card.Debug() end
         if NS.Waypoint and NS.Waypoint.Debug then NS.Waypoint.Debug() end
+        if NS.Log and NS.Log.Debug then NS.Log.Debug() end
         return
+    elseif cmd == "log" then
+        local L = NS.Log
+        if not L then
+            msg("the timing log loads after a full restart of WoW (not just /reload).")
+            return
+        end
+        if rest == "" or rest == "toggle" then
+            db.logTimes = not db.logTimes
+        elseif rest == "on" or rest == "off" then
+            db.logTimes = rest == "on"
+        elseif rest == "status" then
+            msg(L.StatusText())
+            return
+        elseif rest == "new" then
+            L.NewSession()
+            msg(db.logTimes and "started a new log session." or "the log starts a new session when you turn it on.")
+            return
+        elseif rest == "clear" then
+            local st = L.Stats()
+            msg(("this deletes %d steps and %d kills in %d sessions. Type /rxpe log clear yes to go ahead."):format(st.steps, st.kills, st.sessions))
+            return
+        elseif rest == "clear yes" then
+            L.Clear()
+            msg("timing log cleared.")
+            return
+        else
+            msg("log takes on, off, status, new or clear, e.g. /rxpe log on")
+            return
+        end
+        msg("step and kill timing log " .. onOff(db.logTimes) .. (db.logTimes and ": saved when you log out or reload." or "."))
     elseif cmd == "toast" then
         local T = NS.Toast
         if rest == "move" and T then
@@ -1611,7 +1689,7 @@ SlashCmdList.RXPENHANCED = function(input)
             ahead and ("step " .. ahead.index .. " — " .. ahead.label) or "nothing ahead with a place to go"))
         return
     else
-        msg("/rxpe opens the settings · on|off|toggle · arrow · label · pins · waypoint · marker <style> · sound <on|off|name> · ui (enhanced UI) · rxp · skin · toast [move|test|reset] · intro · lock · unlock · scale <n> · opacity <n> · color <hex> · reset · status · debug")
+        msg("/rxpe opens the settings · on|off|toggle · arrow · label · pins · waypoint · marker <style> · sound <on|off|name> · ui (enhanced UI) · rxp · skin · toast [move|test|reset] · intro · log [on|off|status|new|clear] · lock · unlock · scale <n> · opacity <n> · color <hex> · reset · status · debug")
         return
     end
     settingsChanged()

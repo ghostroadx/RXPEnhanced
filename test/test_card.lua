@@ -40,6 +40,7 @@ M.setGuide(guide())
 assert(loadfile("../RXPEnhanced/RXPEnhanced.lua"))("RXPEnhanced")
 assert(loadfile("../RXPEnhanced/Card.lua"))("RXPEnhanced")
 assert(loadfile("../RXPEnhanced/Toast.lua"))("RXPEnhanced")
+assert(loadfile("../RXPEnhanced/Log.lua"))("RXPEnhanced")
 local NS, Card = RXPEnhanced, RXPEnhanced.Card
 local driver
 for _, f in ipairs(M.frames) do if f.events.PLAYER_LOGIN then driver = f end end
