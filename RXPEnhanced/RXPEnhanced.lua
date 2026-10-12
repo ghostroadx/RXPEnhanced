@@ -202,6 +202,27 @@ local function placeOf(step)
     return first
 end
 
+-- Where step i of a guide happens. RestedXP's Speedrun guides often put the coordinates on a travel
+-- step marked "#completewith next" ("Travel to Bael Modan") and leave the step it leads to ("Talk to
+-- Feegly") without a Go to of its own. A step with no place takes the place of the travel step right
+-- before it, or of a #completewith step in the same run that names its label. from: the first step
+-- index to look back to (#completewith steps before it are already active, and lead elsewhere).
+local function placeIn(guide, i, from)
+    local step = guide and guide.steps and guide.steps[i]
+    if type(step) ~= "table" then return nil end
+    local place = placeOf(step)
+    if place then return place end
+    for j = i - 1, math.max(from or 1, 1), -1 do
+        local s = guide.steps[j]
+        if type(s) ~= "table" or not s.sticky then break end
+        local leads = (s.completewith == "next" and j == i - 1) or (step.label ~= nil and s.completewith == step.label)
+        if leads then
+            local p = placeOf(s)
+            if p then return p, s end
+        end
+    end
+end
+
 local function plain(s)
     s = s:gsub("|cRXP_%u+_", ""):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
     s = s:gsub("|T.-|t", ""):gsub("|A.-|a", ""):gsub("^%s*>>%s*", ""):gsub("%s+", " ")
@@ -247,7 +268,9 @@ function NS.FindNext()
     for i = current + 1, math.min(#guide.steps, current + LOOKAHEAD) do
         local step = guide.steps[i]
         if type(step) == "table" and not willSkip(step) then
-            local place = placeOf(step)
+            -- A step with no place of its own and no travel step leading to it happens where you
+            -- already are (an item to equip, a second NPC beside the first): look past it.
+            local place = placeIn(guide, i, current + 1)
             if place then
                 return { step = step, index = step.index or i, place = place, label = labelOf(step), current = current }
             end
@@ -259,7 +282,7 @@ end
 NS.private = {
     call = call, getRXP = getRXP, onQuest = onQuest, turnedIn = turnedIn, questComplete = questComplete,
     guardSkips = guardSkips, elementDone = elementDone, objectivesDone = objectivesDone, willSkip = willSkip,
-    placeOf = placeOf, plain = plain, labelOf = labelOf, hexToRGB = hexToRGB, rgbToHex = rgbToHex,
+    placeOf = placeOf, placeIn = placeIn, plain = plain, labelOf = labelOf, hexToRGB = hexToRGB, rgbToHex = rgbToHex,
     db = function() return db end,
     hbd = function() return HBD end,
 }

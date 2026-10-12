@@ -315,7 +315,8 @@ local function buildCurrent(model, step)
             if el.wx and el.wy and not isDone(el) and not el.hidePin then target = el break end
         end
     end
-    target = target or P.placeOf(step)
+    -- No place of its own: the travel step leading to it (RestedXP's Speedrun guides).
+    target = target or P.placeOf(step) or (rxp and step.index and P.placeIn(rxp.currentGuide, step.index, 1))
     model.target = target
     model.distance = target and distanceTo(target)
 
@@ -395,7 +396,7 @@ local function buildUpcoming(model, guide, cur)
         local step = guide.steps[i]
         if type(step) == "table" and not step.sticky and not step.tip and not step.hidewindow and not P.willSkip(step) then
             local icon, tint = stepIcon(step)
-            local place = P.placeOf(step)
+            local place = P.placeIn(guide, i, cur + 1)
             local distance = place and distanceTo(place)
             model.upcoming[#model.upcoming + 1] = {
                 index = step.index or i, step = step, label = P.labelOf(step, 140),

@@ -230,6 +230,49 @@ tick(0.016)
 check("arrow turns with the player", math.abs(arrow.tex.rotation) < 1e-6, arrow.tex.rotation)
 facing = 0
 
+-- RestedXP's Speedrun guides: the coordinates are on "#completewith next" travel steps, and the step
+-- each one leads to has no Go to of its own (Deneroc, Thousand Needles: the arrow jumped 21 -> 28).
+setGuide({
+    step({ text(">>Talk to |cRXP_FRIENDLY_Feegly|r"), accept(1100) }),                                                   -- 1 current
+    step({ goto(0, 300), text("Go down to the bottom floor of Bael'dun") }, { sticky = true, completewith = "next" }), -- 2 travel
+    step({ text(">>Open |cRXP_PICK_General Twinbraid's Strongbox|r"), complete(1100, 1) }),                           -- 3 no Go to
+    step({ goto(0, 50), text("Exit Bael'dun Keep") }, { sticky = true, completewith = "next" }),                      -- 4 travel
+    step({ text(">>Talk to |cRXP_FRIENDLY_Feegly|r"), turnin(1100) }),                                                -- 5 no Go to
+    step({ goto(0, 900), text(">>Talk to |cRXP_FRIENDLY_Grish|r"), turnin(1153) }),                                   -- 6 its own Go to
+})
+quests.on[1100] = true
+tick()
+check("speedrun guide: the next step is the strongbox, not the next step with its own Go to", NS.ahead and NS.ahead.index == 3, NS.ahead and NS.ahead.index)
+check("speedrun guide: it points where the travel step before it leads", NS.ahead and NS.ahead.place.wy == 300)
+check("speedrun guide: labelled with the step itself", NS.ahead and NS.ahead.label == "Open General Twinbraid's Strongbox", NS.ahead and NS.ahead.label)
+RXP.progress = 3
+tick()
+check("speedrun guide: from the strongbox, Feegly next, at the keep's exit", NS.ahead and NS.ahead.index == 5 and NS.ahead.place.wy == 50, NS.ahead and NS.ahead.index)
+quests.on[1100] = nil
+RXP.progress = 1
+-- A #completewith step that names a later step's label leads to it too.
+setGuide({
+    step({ goto(100, 0), accept(1) }),                                                                         -- 1 current
+    step({ goto(0, 400), text("Look for Gordo along the road") }, { sticky = true, completewith = "gordo" }), -- 2 travel
+    step({ text(">>Talk to |cRXP_FRIENDLY_Gordo|r"), accept(5481) }, { label = "gordo" }),                   -- 3 no Go to
+})
+tick()
+check("speedrun guide: a #completewith <label> travel step leads to that step", NS.ahead and NS.ahead.index == 3 and NS.ahead.place.wy == 400)
+-- No place and nothing leading to it: it happens where you are, so look past it (as before).
+setGuide({
+    step({ goto(100, 0), text("Buy the Wooden Mallet"), accept(1) }),                                      -- 1 current
+    step({ text("Equip the Wooden Mallet") }),                                                             -- 2 here
+    step({ goto(0, 200), text(">>Talk to |cRXP_FRIENDLY_Shadow Priest Sarvis|r"), turnin(363) }),          -- 3
+    step({ goto(0, 250), text("Kill zombies on the way") }, { sticky = true, completewith = "later" }),   -- 4 leads elsewhere
+    step({ text("Read the sign") }),                                                                       -- 5 here, not led to by 4
+})
+tick()
+check("no place, nothing leading to it: looks past it to the next step with a place", NS.ahead and NS.ahead.index == 3, NS.ahead and NS.ahead.index)
+RXP.progress = 3
+tick()
+check("a #completewith step for another label doesn't lend its place", NS.ahead == nil, NS.ahead and NS.ahead.index)
+RXP.progress = 1
+
 -- Guards: a quest check that fails skips the step.
 setGuide({
     step({ goto(100, 0), accept(1) }),

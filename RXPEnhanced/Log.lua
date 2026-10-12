@@ -251,7 +251,7 @@ local function openStep(guide, key, index, part)
     local step = guide.steps[index]
     local s = S.session
     local inst, x, y = posOf()
-    local place = type(step) == "table" and P.placeOf(step) or nil
+    local place = type(step) == "table" and P.placeIn(guide, index, 1) or nil
     S.openStep = step -- the step itself (kept out of the saved log)
     s.open = {
         key = key, g = guideIndex(key), idx = index,
